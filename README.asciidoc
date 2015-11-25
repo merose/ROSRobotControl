@@ -41,7 +41,7 @@ be in the range -255 to +255.
 motor control value.
 `~rmotor_min` (Float32, default 60):: Right wheel minimum absolute
 motor control value.
-`~motor_timeout` (Float32, default 2):: Maximum time, in seconds, from the
+`~motor_cmd_timeout` (Int16, default 500):: Maximum time, in milliseconds, from the
 last motor command. If no command is received within this timeout, the
 node assumes the controller node has crashed, and sets the motor speeds to
 zero.
