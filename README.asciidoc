@@ -1,0 +1,42 @@
+= ROSRomeoNode
+
+This is an Arduino proejct for a DFRobot Romeo that implements a ROS
+Node using `rosserial_arduino` to publish encoder and sensor values
+and subscribe to desired motor speeds.
+
+== Node API
+
+This node uses motor control commands to set the speeds of two motors. In
+addition, it monitors encoders for the two motors and published their
+counts and rates.
+
+To prevent a ROS node crash or communication problem from causing a
+runaway robot, the node will stop the robot if no new motor command
+is received within a timeout threshold.
+
+=== Published Topics
+
+`lwheel` (Int16):: Left wheel encoder value
+`rwheel` (Int16):: Right wheel encoder value
+`lwheel_rate` (Float32):: Left wheel speed in encoder ticks per
+second.
+`rwheel_rate` (Float32):: Right wheel speed in encoder ticks per
+second.
+
+=== Subscribed Topics
+
+`lmotor_cmd` (Float32):: Left wheel motor control command. Should
+be in the range -255 to +255.
+`rmotor_cmd` (Float32):: Right wheel motor control command. Should
+be in the range -255 to +255.
+
+=== Parameters
+
+`~lmotor_min` (Float32, default 60):: Left wheel minimum absolute
+motor control value.
+`~rmotor_min` (Float32, default 60):: Right wheel minimum absolute
+motor control value.
+`~motor_timeout` (Float32, default 2):: Maximum time, in seconds, from the
+last motor command. If no command is received within this timeout, the
+node assumes the controller node has crashed, and sets the motor speeds to
+zero.
