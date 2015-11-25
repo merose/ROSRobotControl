@@ -1,12 +1,13 @@
 :imagesdir: ./images
-:toc:
-:tocplacement: preamble
+:toc: macro
 
 = ROSRomeoNode
 
 This is an Arduino proejct for a DFRobot Romeo that implements a ROS
 Node using `rosserial_arduino` to publish encoder and sensor values
 and subscribe to desired motor speeds.
+
+toc::[]
 
 == Node API
 
