@@ -26,3 +26,9 @@
 *.exe
 *.out
 *.app
+
+# Editor temporary files
+*~
+
+# Asciidoc output files
+*.html
