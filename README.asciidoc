@@ -23,25 +23,24 @@ is received within a timeout threshold.
 
 `lwheel` (Int16):: Left wheel encoder value
 `rwheel` (Int16):: Right wheel encoder value
-`lwheel_rate` (Float32):: Left wheel speed in encoder ticks per
+`lwheel_velocity` (Float32):: Left wheel speed in meters per
 second.
-`rwheel_rate` (Float32):: Right wheel speed in encoder ticks per
+`rwheel_velocity` (Float32):: Right wheel speed in encoder ticks per
 second.
 
 === Subscribed Topics
 
-`lmotor_cmd` (Float32):: Left wheel motor control command. Should
-be in the range -255 to +255.
-`rmotor_cmd` (Float32):: Right wheel motor control command. Should
-be in the range -255 to +255.
+`lwheel_vtarget` (Float32):: Left wheel target speed in meters per second.
+`rwheel_vtarget` (Float32):: Right wheel target speed in meters per second.
 
 === Parameters
 
-`~lmotor_min` (Float32, default 60):: Left wheel minimum absolute
-motor control value.
-`~rmotor_min` (Float32, default 60):: Right wheel minimum absolute
-motor control value.
-`~motor_cmd_timeout` (Int16, default 500):: Maximum time, in milliseconds, from the
-last motor command. If no command is received within this timeout, the
+`ticks_meter` (Int16, default 50):: The number of encoder ticks per meter. A global parameter since it will be used by more than one node.
+`~control_rate` (Int16, default 50):: The rate at which the motors are updated, in Hz.
+`~vtarget_timeout` (Float32, default 2.0):: Maximum time, in seconds, from the
+last velocity target command. If no command is received within this timeout, the
 node assumes the controller node has crashed, and sets the motor speeds to
 zero.
+`Kp` (Float32, default 1.0):: Proportional control parameter.
+`Ki` (Float32, default 0.0):: Integral control parameter.
+`Kd` (Float32, default 0.0):: Derivative control parameter.
