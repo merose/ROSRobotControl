@@ -121,12 +121,12 @@ void setup()
 
   int controlRate;
   if (!nh.getParam("~control_rate", &controlRate)) {
-    controlRate = 50;
+    controlRate = 60;
   }
   controlDelayMillis = 1000.0 / controlRate;
   
   if (!nh.getParam("ticks_meter", &ticksPerMeter)) {
-    ticksPerMeter = 5965;
+    ticksPerMeter = 11931;
   }
   
   float vtargetTimeout;
