@@ -6,6 +6,7 @@
 // Needed on Leonardo to force use of USB serial.
 #define USE_USBCON
 
+#include <PinChangeInt.h>
 #include <SimplePID.h>
 
 #include <ros.h>
@@ -23,10 +24,10 @@ const int M2_SPEED = 6;
 const int M2_DIRECTION = 7;
 
 // Pins for the Pololu motor encoder outputs.
-const int M1_A = 2;
-const int M1_B = 8;
-const int M2_A = 3;
-const int M2_B = 9;
+const int M1_A = 10;
+const int M1_B = 11;
+const int M2_A = 14;
+const int M2_B = 15;
 
 ros::NodeHandle  nh;
 
@@ -52,10 +53,10 @@ ros::Subscriber<std_msgs::Float32> rwheelTargetSub("rwheel_vtarget", &rwheelTarg
 //     https://en.wikipedia.org/wiki/PID_controller#Loop_tuning
 // Ku and Tu were determined by setting Ki and Kd to zero, then increasing
 // Kp until steady oscillation occurs. Tu is the oscillation wavelength.
-const float Ku = .19;
-const float Tu = .23;
-const float Kp = 0.45*Ku;
-const float Ki = 1.2*Kp/Ku;
+const float Ku = .11;
+const float Tu = .20;
+const float Kp = 0.6*Ku;
+const float Ki = 2*Kp/Tu;
 const float Kd = Kp*Tu/8;
 
 SimplePID leftController = SimplePID(Kp, Ki, Kd);
@@ -96,8 +97,10 @@ void setup()
   pinMode(M1_DIRECTION, OUTPUT);
   pinMode(M2_DIRECTION, OUTPUT);
 
-  attachInterrupt(digitalPinToInterrupt(M1_A), leftAChange, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(M2_A), rightAChange, CHANGE);
+  attachPinChangeInterrupt(M1_A, leftAChange, CHANGE);
+  attachPinChangeInterrupt(M1_B, leftBChange, CHANGE);
+  attachPinChangeInterrupt(M2_A, rightAChange, CHANGE);
+  attachPinChangeInterrupt(M2_B, rightBChange, CHANGE);
 
   nh.initNode();
 
@@ -220,8 +223,24 @@ void leftAChange() {
   }
 }
 
+void leftBChange() {
+  if (digitalRead(M1_A) != digitalRead(M1_B)) {
+    ++lwheel;
+  } else {
+    --lwheel;
+  }
+}
+
 void rightAChange() {
   if (digitalRead(M2_A) != digitalRead(M2_B)) {
+    ++rwheel;
+  } else {
+    --rwheel;
+  }
+}
+
+void rightBChange() {
+  if (digitalRead(M2_A) == digitalRead(M2_B)) {
     ++rwheel;
   } else {
     --rwheel;
