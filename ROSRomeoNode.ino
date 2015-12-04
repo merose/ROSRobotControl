@@ -49,15 +49,17 @@ ros::Subscriber<std_msgs::Float32> lwheelTargetSub("lwheel_vtarget", &lwheelTarg
 void rwheelTargetCallback(const std_msgs::Float32& cmdMsg);
 ros::Subscriber<std_msgs::Float32> rwheelTargetSub("rwheel_vtarget", &rwheelTargetCallback);
 
-// Ziegler-Nichols tuning. See this Wikipedia article for details:
-//     https://en.wikipedia.org/wiki/PID_controller#Loop_tuning
-// Ku and Tu were determined by setting Ki and Kd to zero, then increasing
-// Kp until steady oscillation occurs. Tu is the oscillation wavelength.
-const float Ku = .11;
-const float Tu = .20;
-const float Kp = 0.6*Ku;
-const float Ki = 2*Kp/Tu;
-const float Kd = Kp*Tu/8;
+// Good-Gain tuning.
+// See http://home.hit.no/~hansha/documents/control/theory/tuning_pid_controller.pdf.
+//
+// Kp0 = 0.6
+// Tou = 0.144
+// Kp = 80% * Kp0
+// Ti = 1.5*Tou
+// Td = Tou/4
+const float Kp = 0.048;
+const float Ki = 0.279;
+const float Kd = 0.00323;
 
 SimplePID leftController = SimplePID(Kp, Ki, Kd);
 SimplePID rightController = SimplePID(Kp, Ki, Kd);
