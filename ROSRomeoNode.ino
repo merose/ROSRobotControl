@@ -6,7 +6,7 @@
 // Needed on Leonardo to force use of USB serial.
 #define USE_USBCON
 
-#include <PinChangeInt.h>
+#include <EnableInterrupt.h>
 #include <SimplePID.h>
 
 #include <ros.h>
@@ -99,10 +99,10 @@ void setup()
   pinMode(M1_DIRECTION, OUTPUT);
   pinMode(M2_DIRECTION, OUTPUT);
 
-  attachPinChangeInterrupt(M1_A, leftAChange, CHANGE);
-  attachPinChangeInterrupt(M1_B, leftBChange, CHANGE);
-  attachPinChangeInterrupt(M2_A, rightAChange, CHANGE);
-  attachPinChangeInterrupt(M2_B, rightBChange, CHANGE);
+  enableInterrupt(M1_A, leftAChange, CHANGE);
+  enableInterrupt(M1_B, leftBChange, CHANGE);
+  enableInterrupt(M2_A, rightAChange, CHANGE);
+  enableInterrupt(M2_B, rightBChange, CHANGE);
 
   nh.initNode();
 
