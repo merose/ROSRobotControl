@@ -4,8 +4,9 @@
 //
 
 // Needed on Leonardo to force use of USB serial.
-#define USE_USBCON
+//#define USE_USBCON
 
+#include <AStar32U4.h>
 #include <EnableInterrupt.h>
 #include <SimplePID.h>
 
@@ -14,20 +15,13 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 
-const int ONBOARD_SWITCH_PIN = A7;
 const int ONBOARD_LED_PIN = 13;
 
-// The pins for motor control on the Romeo BLE.
-const int M1_DIRECTION = 4;
-const int M1_SPEED = 5;
-const int M2_SPEED = 6;
-const int M2_DIRECTION = 7;
-
-// Pins for the Pololu motor encoder outputs.
-const int M1_A = 10;
+// Pins for the A-Star motor encoder outputs.
+const int M1_A = 7;
 const int M1_B = 11;
-const int M2_A = 14;
-const int M2_B = 15;
+const int M2_A = 15;
+const int M2_B = 16;
 
 ros::NodeHandle  nh;
 
@@ -49,17 +43,17 @@ ros::Subscriber<std_msgs::Float32> lwheelTargetSub("lwheel_vtarget", &lwheelTarg
 void rwheelTargetCallback(const std_msgs::Float32& cmdMsg);
 ros::Subscriber<std_msgs::Float32> rwheelTargetSub("rwheel_vtarget", &rwheelTargetCallback);
 
-// Good-Gain tuning.
-// See http://home.hit.no/~hansha/documents/control/theory/tuning_pid_controller.pdf.
-//
-// Kp0 = 0.6
-// Tou = 0.144
-// Kp = 80% * Kp0
-// Ti = 1.5*Tou
-// Td = Tou/4
-const float Kp = 0.048;
-const float Ki = 0.279;
-const float Kd = 0.00323;
+AStar32U4Motors motors;
+
+// Ziegler-Nichols tuning. See this Wikipedia article for details:
+//     https://en.wikipedia.org/wiki/PID_controller#Loop_tuning
+
+const float Ku = .035;
+const float Tu = .235;
+
+const float Kp = 0.6*Ku;
+const float Ki = 2*Kp/Tu;
+const float Kd = Kp*Tu/8;
 
 SimplePID leftController = SimplePID(Kp, Ki, Kd);
 SimplePID rightController = SimplePID(Kp, Ki, Kd);
@@ -93,11 +87,8 @@ int rightMotorCmd = 0;
 // Minimum motor control value. Motor output below this will stall.
 const int MIN_MOTOR_CMD = 60;
 
-void setup()
-{
+void setup() {
   pinMode(ONBOARD_LED_PIN, OUTPUT);
-  pinMode(M1_DIRECTION, OUTPUT);
-  pinMode(M2_DIRECTION, OUTPUT);
 
   enableInterrupt(M1_A, leftAChange, CHANGE);
   enableInterrupt(M1_B, leftBChange, CHANGE);
@@ -251,9 +242,6 @@ void rightBChange() {
 
 // Sets the left and right motor speeds.
 void setSpeed(int leftSpeed, int rightSpeed) {
-  digitalWrite(M1_DIRECTION, (leftSpeed >= 0 ? HIGH : LOW));
-  analogWrite(M1_SPEED, abs(leftSpeed));
-  digitalWrite(M2_DIRECTION, (rightSpeed >= 0 ? HIGH : LOW));
-  analogWrite(M2_SPEED, abs(rightSpeed));
+  motors.setSpeeds(leftSpeed, rightSpeed);
 }
 
