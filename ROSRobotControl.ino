@@ -48,8 +48,8 @@ AStar32U4Motors motors;
 // Ziegler-Nichols tuning. See this Wikipedia article for details:
 //     https://en.wikipedia.org/wiki/PID_controller#Loop_tuning
 
-const float Ku = .035;
-const float Tu = .235;
+const float Ku = .15;
+const float Tu = .1142857143;
 
 const float Kp = 0.6*Ku;
 const float Ki = 2*Kp/Tu;
@@ -86,6 +86,9 @@ int rightMotorCmd = 0;
 
 // Minimum motor control value. Motor output below this will stall.
 const int MIN_MOTOR_CMD = 60;
+
+// Maximum motor control value.
+const int MAX_MOTOR_CMD = 400;
 
 void setup() {
   pinMode(ONBOARD_LED_PIN, OUTPUT);
@@ -158,15 +161,15 @@ void loop()
   rwheelVelocityPub.publish(&rwheelVelocityMsg);
   
   int leftControl = leftController.getControlValue(lwheelRate, dt);
-  leftMotorCmd += min(255, leftControl);
-  leftMotorCmd = constrain(leftMotorCmd, -255, 255);
+  leftMotorCmd += min(MAX_MOTOR_CMD, leftControl);
+  leftMotorCmd = constrain(leftMotorCmd, -MAX_MOTOR_CMD, MAX_MOTOR_CMD);
   if (leftMotorCmd > 0) {
     leftMotorCmd = max(leftMotorCmd, MIN_MOTOR_CMD);
   }
   
   int rightControl = rightController.getControlValue(rwheelRate, dt);
-  rightMotorCmd += min(255, rightControl);
-  rightMotorCmd = constrain(rightMotorCmd, -255, 255);
+  rightMotorCmd += min(MAX_MOTOR_CMD, rightControl);
+  rightMotorCmd = constrain(rightMotorCmd, -MAX_MOTOR_CMD, MAX_MOTOR_CMD);
   if (rightMotorCmd > 0) {
     rightMotorCmd = max(rightMotorCmd, MIN_MOTOR_CMD);
   }
