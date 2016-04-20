@@ -23,7 +23,7 @@ const int M1_B = 11;
 const int M2_A = 15;
 const int M2_B = 16;
 
-ros::NodeHandle  nh;
+ros::NodeHandle_<ArduinoHardware, 6, 6, 150, 150> nh;
 
 std_msgs::Int16 lwheelMsg;
 ros::Publisher lwheelPub("lwheel", &lwheelMsg);
