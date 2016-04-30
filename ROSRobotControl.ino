@@ -15,6 +15,59 @@
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 
+class Message {
+private:
+  static const int MAX_MSG_LENGTH = 100;
+
+  char msg[MAX_MSG_LENGTH+1];
+
+public:
+
+  Message start() {
+    msg[0] = '\0';
+    return *this;
+  }
+
+  Message append(const char *s) {
+    strncat(msg, s, MAX_MSG_LENGTH - strlen(msg) - 1);
+    return *this;
+  }
+  
+  Message operator<<(const char * s) {
+    return append(s);
+  }
+
+  Message operator<<(int n) {
+    int len = strlen(msg);
+    snprintf(msg+len, MAX_MSG_LENGTH-len, "%d", n);
+    return *this;
+  }
+
+  Message operator<<(long n) {
+    int len = strlen(msg);
+    snprintf(msg+len, MAX_MSG_LENGTH-len, "%ld", n);
+    return *this;
+  }
+
+  Message operator<<(float n) {
+    int len = strlen(msg);
+    snprintf(msg+len, MAX_MSG_LENGTH-len, "%f", n);
+    return *this;
+  }
+
+  Message operator<<(double n) {
+    int len = strlen(msg);
+    snprintf(msg+len, MAX_MSG_LENGTH-len, "%lf", n);
+    return *this;
+  }
+
+  operator const char*() {
+    return msg;
+  }
+};
+
+Message logMessage;
+
 const int ONBOARD_LED_PIN = 13;
 
 // Pins for the A-Star motor encoder outputs.
@@ -114,19 +167,32 @@ void setup() {
   }
 
   int controlRate;
-  if (!nh.getParam("~control_rate", &controlRate)) {
+  if (nh.getParam("~control_rate", &controlRate)) {
+    logMessage.start() << "~control_rate = " << controlRate;
+  } else {
     controlRate = 60;
+    logMessage.start() << "~control_rate defaulting to " << controlRate;
   }
+  nh.logdebug(logMessage);
   controlDelayMillis = 1000.0 / controlRate;
   
-  if (!nh.getParam("ticks_meter", &ticksPerMeter)) {
+  if (nh.getParam("~ticks_meter", &ticksPerMeter)) {
+    logMessage.start() << "~ticks_meter = " << ticksPerMeter;
+  } else {
     ticksPerMeter = 11931;
+    logMessage.start() << "~ticks_meter defaulting to " << ticksPerMeter;
   }
+  nh.logdebug(logMessage);
   
   float vtargetTimeout;
-  if (!nh.getParam("~vtarget_timeout", &vtargetTimeout)) {
+  if (nh.getParam("~vtarget_timeout", &vtargetTimeout)) {
+    logMessage.start() << "~vtarget_timeout = " << vtargetTimeout;
+  } else {
     vtargetTimeout = 0.250;
+    logMessage.start() << "~vtarget_timeout defaulting to "
+		       << vtargetTimeout;
   }
+  nh.logdebug(logMessage);
   vtargetTimeoutMillis = vtargetTimeout * 1000;
 
   lastLoopTime = micros();
