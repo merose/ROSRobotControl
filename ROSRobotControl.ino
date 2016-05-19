@@ -85,10 +85,10 @@ std_msgs::Int16 rwheelMsg;
 ros::Publisher rwheelPub("rwheel", &rwheelMsg);
 
 std_msgs::Float32 lwheelVelocityMsg;
-ros::Publisher lwheelVelocityPub("lwheel_velocity", &lwheelVelocityMsg);
+ros::Publisher lwheelVelocityPub("~lwheel_rate", &lwheelVelocityMsg);
 
 std_msgs::Float32 rwheelVelocityMsg;
-ros::Publisher rwheelVelocityPub("rwheel_velocity", &rwheelVelocityMsg);
+ros::Publisher rwheelVelocityPub("~rwheel_rate", &rwheelVelocityMsg);
 
 void lwheelTargetCallback(const std_msgs::Float32& cmdMsg);
 ros::Subscriber<std_msgs::Float32> lwheelTargetSub("lwheel_vtarget", &lwheelTargetCallback);
