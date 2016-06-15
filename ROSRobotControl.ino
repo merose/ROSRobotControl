@@ -9,64 +9,47 @@
 #include <AStar32U4.h>
 #include <EnableInterrupt.h>
 #include <SimplePID.h>
+#include <TaskManager.h>
 
 #include <ros.h>
-#include <std_msgs/Int16.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Float32.h>
 
-class Message {
-private:
-  static const int MAX_MSG_LENGTH = 100;
+class StringBuf : public Print {
+  private:
+    int len;
+    char msg[80];
+    
+  public:
+    StringBuf() {
+      len = 0;
+    }
+    
+    size_t write(uint8_t c) {
+      if (len < sizeof(msg)-1) {
+        msg[len++] = c;
+        msg[len] = '\0';
+      }
 
-  char msg[MAX_MSG_LENGTH+1];
+      return 1;
+    }
 
-public:
+    const char *get() {
+      msg[sizeof(msg)-1] = '\0';
+      len = 0;
+      return msg;
+    }
 
-  Message start() {
-    msg[0] = '\0';
-    return *this;
-  }
-
-  Message append(const char *s) {
-    strncat(msg, s, MAX_MSG_LENGTH - strlen(msg) - 1);
-    return *this;
-  }
-  
-  Message operator<<(const char * s) {
-    return append(s);
-  }
-
-  Message operator<<(int n) {
-    int len = strlen(msg);
-    snprintf(msg+len, MAX_MSG_LENGTH-len, "%d", n);
-    return *this;
-  }
-
-  Message operator<<(long n) {
-    int len = strlen(msg);
-    snprintf(msg+len, MAX_MSG_LENGTH-len, "%ld", n);
-    return *this;
-  }
-
-  Message operator<<(float n) {
-    int len = strlen(msg);
-    snprintf(msg+len, MAX_MSG_LENGTH-len, "%f", n);
-    return *this;
-  }
-
-  Message operator<<(double n) {
-    int len = strlen(msg);
-    snprintf(msg+len, MAX_MSG_LENGTH-len, "%lf", n);
-    return *this;
-  }
-
-  operator const char*() {
-    return msg;
-  }
+    StringBuf& print_P(const char *s) {
+      int c;
+      while ((c = pgm_read_byte(s++)) != '\0') {
+        write(c);
+      }
+    }
+    
 };
 
-Message logMessage;
+StringBuf buf;
 
 const int ONBOARD_LED_PIN = 13;
 
@@ -76,27 +59,44 @@ const int M1_B = 11;
 const int M2_A = 15;
 const int M2_B = 16;
 
-ros::NodeHandle_<ArduinoHardware, 6, 6, 150, 150> nh;
+ros::NodeHandle_<ArduinoHardware, 2, 13, 125, 125> nh;
 
-std_msgs::Int16 lwheelMsg;
-ros::Publisher lwheelPub("lwheel", &lwheelMsg);
+std_msgs::Int32 int32Msg;
+std_msgs::Float32 float32Msg;
 
-std_msgs::Int16 rwheelMsg;
-ros::Publisher rwheelPub("rwheel", &rwheelMsg);
+ros::Publisher lwheelPub("~lwheel", &float32Msg);
 
-std_msgs::Float32 lwheelVelocityMsg;
-ros::Publisher lwheelVelocityPub("~lwheel_rate", &lwheelVelocityMsg);
+ros::Publisher rwheelPub("~rwheel", &float32Msg);
 
-std_msgs::Float32 rwheelVelocityMsg;
-ros::Publisher rwheelVelocityPub("~rwheel_rate", &rwheelVelocityMsg);
+ros::Publisher lwheelVelocityPub("~lwheel_vel", &float32Msg);
+
+ros::Publisher rwheelVelocityPub("~rwheel_vel", &float32Msg);
+
+ros::Publisher a0Pub("~a0", &int32Msg);
+ros::Publisher a2Pub("~a2", &int32Msg);
+ros::Publisher a3Pub("~a3", &int32Msg);
+ros::Publisher a4Pub("~a4", &int32Msg);
+ros::Publisher a5Pub("~a5", &int32Msg);
+
+ros::Publisher batteryVoltagePub("~battery_voltage", &float32Msg);
+
+ros::Publisher buttonAPub("~button_a", &int32Msg);
+ros::Publisher buttonBPub("~button_b", &int32Msg);
+ros::Publisher buttonCPub("~button_c", &int32Msg);
 
 void lwheelTargetCallback(const std_msgs::Float32& cmdMsg);
-ros::Subscriber<std_msgs::Float32> lwheelTargetSub("lwheel_vtarget", &lwheelTargetCallback);
+ros::Subscriber<std_msgs::Float32> lwheelTargetSub("~lwheel_vtarget", &lwheelTargetCallback);
 
 void rwheelTargetCallback(const std_msgs::Float32& cmdMsg);
-ros::Subscriber<std_msgs::Float32> rwheelTargetSub("rwheel_vtarget", &rwheelTargetCallback);
+ros::Subscriber<std_msgs::Float32> rwheelTargetSub("~rwheel_vtarget", &rwheelTargetCallback);
 
 AStar32U4Motors motors;
+
+// These objects provide access to the A-Star's on-board
+// buttons.  We will only use buttonA.
+AStar32U4ButtonA buttonA;
+AStar32U4ButtonB buttonB;
+AStar32U4ButtonC buttonC;
 
 // Ziegler-Nichols tuning. See this Wikipedia article for details:
 //     https://en.wikipedia.org/wiki/PID_controller#Loop_tuning
@@ -104,9 +104,9 @@ AStar32U4Motors motors;
 const float Ku = .15;
 const float Tu = .1142857143;
 
-const float Kp = 0.6*Ku;
-const float Ki = 2*Kp/Tu;
-const float Kd = Kp*Tu/8;
+const float Kp = 0.6 * Ku;
+const float Ki = 2 * Kp / Tu;
+const float Kd = Kp * Tu / 8;
 
 SimplePID leftController = SimplePID(Kp, Ki, Kd);
 SimplePID rightController = SimplePID(Kp, Ki, Kd);
@@ -122,6 +122,7 @@ int lwheelTargetRate = 0;
 int rwheelTargetRate = 0;
 
 // The interval between motor control steps.
+int controlRate;
 int controlDelayMillis;
 
 // The number of encoder ticks per meter.
@@ -129,6 +130,7 @@ int ticksPerMeter;
 
 // The number of milliseconds without a velocity target when the robot
 // will automatically turn off the motors.
+float vtargetTimeout;
 int vtargetTimeoutMillis;
 
 unsigned long lastLoopTime;
@@ -142,6 +144,8 @@ const int MIN_MOTOR_CMD = 60;
 
 // Maximum motor control value.
 const int MAX_MOTOR_CMD = 400;
+
+TaskManager taskMgr;
 
 void setup() {
   pinMode(ONBOARD_LED_PIN, OUTPUT);
@@ -158,52 +162,85 @@ void setup() {
   nh.advertise(lwheelVelocityPub);
   nh.advertise(rwheelVelocityPub);
 
+  nh.advertise(a0Pub);
+  nh.advertise(a2Pub);
+  nh.advertise(a3Pub);
+  nh.advertise(a4Pub);
+  nh.advertise(a5Pub);
+
+  nh.advertise(batteryVoltagePub);
+
+  nh.advertise(buttonAPub);
+  nh.advertise(buttonBPub);
+  nh.advertise(buttonCPub);
+
   nh.subscribe(lwheelTargetSub);
   nh.subscribe(rwheelTargetSub);
 
   // Wait until the node has initialized before getting parameters.
-  while(!nh.connected()) {
+  while (!nh.connected()) {
     nh.spinOnce();
   }
 
-  int controlRate;
-  if (nh.getParam("~control_rate", &controlRate)) {
-    logMessage.start() << "~control_rate = " << controlRate;
+  buf.print_P(PSTR("Test message: "));
+  buf.print(123);
+  nh.loginfo(buf.get());
+
+  buf.print_P(PSTR("~control_rate"));
+  if (nh.getParam(buf.get(), &controlRate)) {
+    buf.print_P(PSTR("~control_rate = "));
+    buf.print(controlRate);
   } else {
     controlRate = 60;
-    logMessage.start() << "~control_rate defaulting to " << controlRate;
+    buf.print_P(PSTR("~control_rate defaulting to "));
+    buf.print(controlRate);
   }
-  nh.logdebug(logMessage);
+  nh.loginfo(buf.get());
+  nh.spinOnce();
   controlDelayMillis = 1000.0 / controlRate;
-  
-  if (nh.getParam("~ticks_meter", &ticksPerMeter)) {
-    logMessage.start() << "~ticks_meter = " << ticksPerMeter;
+
+  buf.print_P(PSTR("~ticks_meter"));
+  if (nh.getParam(buf.get(), &ticksPerMeter)) {
+    buf.print_P(PSTR("~ticks_meter = "));
+    buf.print(ticksPerMeter);
   } else {
     ticksPerMeter = 11931;
-    logMessage.start() << "~ticks_meter defaulting to " << ticksPerMeter;
+    buf.print_P(PSTR("~ticks_meter defaulting to "));
+    buf.print(ticksPerMeter);
   }
-  nh.logdebug(logMessage);
-  
-  float vtargetTimeout;
-  if (nh.getParam("~vtarget_timeout", &vtargetTimeout)) {
-    logMessage.start() << "~vtarget_timeout = " << vtargetTimeout;
+  nh.loginfo(buf.get());
+  nh.spinOnce();
+
+  buf.print_P(PSTR("~vtarget_timeout"));
+  if (nh.getParam(buf.get(), &vtargetTimeout)) {
+    buf.print_P(PSTR("~vtarget_timeout = "));
+    buf.print(vtargetTimeout);
   } else {
     vtargetTimeout = 0.250;
-    logMessage.start() << "~vtarget_timeout defaulting to "
-		       << vtargetTimeout;
+    buf.print_P(PSTR("~vtarget_timeout defaulting to "));
+    buf.print(vtargetTimeout);
   }
-  nh.logdebug(logMessage);
+  nh.loginfo(buf.get());
+  nh.spinOnce();
   vtargetTimeoutMillis = vtargetTimeout * 1000;
 
   lastLoopTime = micros();
   lastMotorCmdTime = lastLoopTime;
+
+  taskMgr.addPeriodicTask(controlMotors, controlDelayMillis);
+  taskMgr.addPeriodicTask(publishAnalogValues, 17); // 17ms ~ 60Hz
+  taskMgr.addPeriodicTask(publishSwitches, 100); // 100ms ~ 10Hz
+  taskMgr.addPeriodicTask(publishVoltage, 1000); // 1000ms ~ 1Hz
 }
 
 // Every loop, publish the encoder and wheel rates.
-void loop()
-{
-  delay(controlDelayMillis);
+void loop() {
+  taskMgr.doTasks();
+  nh.spinOnce();
+  delay(1);
+}
 
+void controlMotors() {
   long curLoopTime = micros();
 
   noInterrupts();
@@ -211,28 +248,28 @@ void loop()
   long curRwheel = rwheel;
   interrupts();
 
-  lwheelMsg.data = (int) curLwheel;
-  rwheelMsg.data = (int) curRwheel;
-  lwheelPub.publish(&lwheelMsg);
-  rwheelPub.publish(&rwheelMsg);
+  float32Msg.data = (float) curLwheel / ticksPerMeter;
+  lwheelPub.publish(&float32Msg);
+  float32Msg.data = (float) curRwheel / ticksPerMeter;
+  rwheelPub.publish(&float32Msg);
 
   float dt = (curLoopTime - lastLoopTime) / 1E6;
 
   float lwheelRate = ((curLwheel - lastLwheel) / dt);
   float rwheelRate = ((curRwheel - lastRwheel) / dt);
 
-  lwheelVelocityMsg.data = lwheelRate / ticksPerMeter;
-  rwheelVelocityMsg.data = rwheelRate / ticksPerMeter;
-  lwheelVelocityPub.publish(&lwheelVelocityMsg);
-  rwheelVelocityPub.publish(&rwheelVelocityMsg);
-  
+  float32Msg.data = lwheelRate / ticksPerMeter;
+  lwheelVelocityPub.publish(&float32Msg);
+  float32Msg.data = rwheelRate / ticksPerMeter;
+  rwheelVelocityPub.publish(&float32Msg);
+
   int leftControl = leftController.getControlValue(lwheelRate, dt);
   leftMotorCmd += min(MAX_MOTOR_CMD, leftControl);
   leftMotorCmd = constrain(leftMotorCmd, -MAX_MOTOR_CMD, MAX_MOTOR_CMD);
   if (leftMotorCmd > 0) {
     leftMotorCmd = max(leftMotorCmd, MIN_MOTOR_CMD);
   }
-  
+
   int rightControl = rightController.getControlValue(rwheelRate, dt);
   rightMotorCmd += min(MAX_MOTOR_CMD, rightControl);
   rightMotorCmd = constrain(rightMotorCmd, -MAX_MOTOR_CMD, MAX_MOTOR_CMD);
@@ -247,9 +284,9 @@ void loop()
   if (rwheelTargetRate == 0) {
     rightMotorCmd = 0;
   }
-  
+
   setSpeed(leftMotorCmd, rightMotorCmd);
-  
+
   // Turn off motors if too much time has elapsed since last motor command.
   if (millis() - lastMotorCmdTime > vtargetTimeoutMillis) {
     lwheelTargetRate = 0;
@@ -259,10 +296,41 @@ void loop()
 
   lastLwheel = curLwheel;
   lastRwheel = curRwheel;
-  
+
   lastLoopTime = curLoopTime;
-  
-  nh.spinOnce();
+}
+
+void publishAnalogValues() {
+  int a0 = analogRead(A0);
+  int a2 = analogRead(A2);
+  int a3 = analogRead(A3);
+  int a4 = analogRead(A4);
+  int a5 = analogRead(A5);
+
+  int32Msg.data = a0;
+  a0Pub.publish(&int32Msg);
+
+  int32Msg.data = a2;
+  a2Pub.publish(&int32Msg);
+
+  int32Msg.data = a3;
+  a3Pub.publish(&int32Msg);
+
+  int32Msg.data = a4;
+  a4Pub.publish(&int32Msg);
+
+  int32Msg.data = a5;
+  a5Pub.publish(&int32Msg);
+}
+
+void publishSwitches() {
+  int32Msg.data = buttonA.getSingleDebouncedPress();
+  buttonAPub.publish(&int32Msg);
+}
+
+void publishVoltage() {
+  float32Msg.data = readBatteryMillivoltsLV() / 1000.0;
+  batteryVoltagePub.publish(&float32Msg);
 }
 
 void lwheelTargetCallback(const std_msgs::Float32& cmdMsg) {
