@@ -12,7 +12,7 @@
 #include <TaskManager.h>
 
 #include <ros.h>
-#include <std_msgs/Int32.h>
+#include <std_msgs/Int16.h>
 #include <std_msgs/Float32.h>
 
 class StringBuf : public Print {
@@ -59,36 +59,44 @@ const int M1_B = 11;
 const int M2_A = 15;
 const int M2_B = 16;
 
-ros::NodeHandle_<ArduinoHardware, 2, 13, 125, 125> nh;
+ros::NodeHandle_<ArduinoHardware, 5, 14, 125, 125> nh;
 
-std_msgs::Int32 int32Msg;
+std_msgs::Int16 int16Msg;
 std_msgs::Float32 float32Msg;
 
-ros::Publisher lwheelPub("~lwheel", &float32Msg);
+ros::Publisher lwheelPub("~l_ticks", &int16Msg);
+ros::Publisher lwheelVelocityPub("~l_vel", &float32Msg);
 
-ros::Publisher rwheelPub("~rwheel", &float32Msg);
+ros::Publisher rwheelPub("~r_ticks", &int16Msg);
+ros::Publisher rwheelVelocityPub("~r_vel", &float32Msg);
 
-ros::Publisher lwheelVelocityPub("~lwheel_vel", &float32Msg);
+ros::Publisher a0Pub("~a0", &int16Msg);
+ros::Publisher a2Pub("~a2", &int16Msg);
+ros::Publisher a3Pub("~a3", &int16Msg);
+ros::Publisher a4Pub("~a4", &int16Msg);
+ros::Publisher a5Pub("~a5", &int16Msg);
+ros::Publisher a6Pub("~a6", &int16Msg);
 
-ros::Publisher rwheelVelocityPub("~rwheel_vel", &float32Msg);
+ros::Publisher batteryVoltagePub("~bat_v", &float32Msg);
 
-ros::Publisher a0Pub("~a0", &int32Msg);
-ros::Publisher a2Pub("~a2", &int32Msg);
-ros::Publisher a3Pub("~a3", &int32Msg);
-ros::Publisher a4Pub("~a4", &int32Msg);
-ros::Publisher a5Pub("~a5", &int32Msg);
-
-ros::Publisher batteryVoltagePub("~battery_voltage", &float32Msg);
-
-ros::Publisher buttonAPub("~button_a", &int32Msg);
-ros::Publisher buttonBPub("~button_b", &int32Msg);
-ros::Publisher buttonCPub("~button_c", &int32Msg);
+ros::Publisher buttonAPub("~btn_a", &int16Msg);
+ros::Publisher buttonBPub("~btn_b", &int16Msg);
+ros::Publisher buttonCPub("~btn_c", &int16Msg);
 
 void lwheelTargetCallback(const std_msgs::Float32& cmdMsg);
-ros::Subscriber<std_msgs::Float32> lwheelTargetSub("~lwheel_vtarget", &lwheelTargetCallback);
+ros::Subscriber<std_msgs::Float32> lwheelTargetSub("~l_vtarg", &lwheelTargetCallback);
 
 void rwheelTargetCallback(const std_msgs::Float32& cmdMsg);
-ros::Subscriber<std_msgs::Float32> rwheelTargetSub("~rwheel_vtarget", &rwheelTargetCallback);
+ros::Subscriber<std_msgs::Float32> rwheelTargetSub("~r_vtarg", &rwheelTargetCallback);
+
+void ledGreenCallback(const std_msgs::Int16& cmdMsg);
+ros::Subscriber<std_msgs::Int16> ledGreenSub("~led_g", &ledGreenCallback);
+
+void ledRedCallback(const std_msgs::Int16& cmdMsg);
+ros::Subscriber<std_msgs::Int16> ledRedSub("~led_r", &ledRedCallback);
+
+void ledYellowCallback(const std_msgs::Int16& cmdMsg);
+ros::Subscriber<std_msgs::Int16> ledYellowSub("~led_y", &ledYellowCallback);
 
 AStar32U4Motors motors;
 
@@ -98,15 +106,17 @@ AStar32U4ButtonA buttonA;
 AStar32U4ButtonB buttonB;
 AStar32U4ButtonC buttonC;
 
-// Ziegler-Nichols tuning. See this Wikipedia article for details:
-//     https://en.wikipedia.org/wiki/PID_controller#Loop_tuning
+int lastButtonA = 0;
+int lastButtonB = 0;
+int lastButtonC = 0;
 
-const float Ku = .15;
-const float Tu = .1142857143;
+const float DEFAULT_Kp = 0.1;
+const float DEFAULT_Kd = 0.0;
+const float DEFAULT_Ki = 0.0;
 
-const float Kp = 0.6 * Ku;
-const float Ki = 2 * Kp / Tu;
-const float Kd = Kp * Tu / 8;
+float Kp = DEFAULT_Kp;
+float Ki = DEFAULT_Ki;
+float Kd = DEFAULT_Kd;
 
 SimplePID leftController = SimplePID(Kp, Ki, Kd);
 SimplePID rightController = SimplePID(Kp, Ki, Kd);
@@ -122,15 +132,10 @@ int lwheelTargetRate = 0;
 int rwheelTargetRate = 0;
 
 // The interval between motor control steps.
-int controlRate;
 int controlDelayMillis;
-
-// The number of encoder ticks per meter.
-int ticksPerMeter;
 
 // The number of milliseconds without a velocity target when the robot
 // will automatically turn off the motors.
-float vtargetTimeout;
 int vtargetTimeoutMillis;
 
 unsigned long lastLoopTime;
@@ -167,6 +172,7 @@ void setup() {
   nh.advertise(a3Pub);
   nh.advertise(a4Pub);
   nh.advertise(a5Pub);
+  nh.advertise(a6Pub);
 
   nh.advertise(batteryVoltagePub);
 
@@ -176,60 +182,89 @@ void setup() {
 
   nh.subscribe(lwheelTargetSub);
   nh.subscribe(rwheelTargetSub);
+  nh.subscribe(ledGreenSub);
+  nh.subscribe(ledRedSub);
+  nh.subscribe(ledYellowSub);
 
   // Wait until the node has initialized before getting parameters.
   while (!nh.connected()) {
     nh.spinOnce();
   }
 
-  buf.print_P(PSTR("Test message: "));
-  buf.print(123);
-  nh.loginfo(buf.get());
-
+  int controlRate;
   buf.print_P(PSTR("~control_rate"));
   if (nh.getParam(buf.get(), &controlRate)) {
     buf.print_P(PSTR("~control_rate = "));
-    buf.print(controlRate);
   } else {
-    controlRate = 60;
     buf.print_P(PSTR("~control_rate defaulting to "));
-    buf.print(controlRate);
+    controlRate = 50;
   }
+  buf.print(controlRate);
+  buf.print_P(PSTR("Hz"));
   nh.loginfo(buf.get());
   nh.spinOnce();
   controlDelayMillis = 1000.0 / controlRate;
 
-  buf.print_P(PSTR("~ticks_meter"));
-  if (nh.getParam(buf.get(), &ticksPerMeter)) {
-    buf.print_P(PSTR("~ticks_meter = "));
-    buf.print(ticksPerMeter);
-  } else {
-    ticksPerMeter = 11931;
-    buf.print_P(PSTR("~ticks_meter defaulting to "));
-    buf.print(ticksPerMeter);
-  }
-  nh.loginfo(buf.get());
-  nh.spinOnce();
-
+  float vtargetTimeout;
   buf.print_P(PSTR("~vtarget_timeout"));
   if (nh.getParam(buf.get(), &vtargetTimeout)) {
     buf.print_P(PSTR("~vtarget_timeout = "));
-    buf.print(vtargetTimeout);
   } else {
-    vtargetTimeout = 0.250;
     buf.print_P(PSTR("~vtarget_timeout defaulting to "));
-    buf.print(vtargetTimeout);
+    vtargetTimeout = 0.5;
   }
+  buf.print(vtargetTimeout, 3);
   nh.loginfo(buf.get());
   nh.spinOnce();
   vtargetTimeoutMillis = vtargetTimeout * 1000;
+
+  float param;
+  
+  buf.print_P(PSTR("~k_p"));
+  if (nh.getParam(buf.get(), &param)) {
+    buf.print_P(PSTR("~k_p = "));
+    Kp = param;
+  } else {
+    buf.print_P(PSTR("~k_p defaulting to "));
+    Kp = DEFAULT_Kp;
+  }
+  buf.print(Kp, 3);
+  nh.loginfo(buf.get());
+  nh.spinOnce();
+
+  buf.print_P(PSTR("~k_i"));
+  if (nh.getParam(buf.get(), &param)) {
+    buf.print_P(PSTR("~k_i = "));
+    Ki = param;
+  } else {
+    buf.print_P(PSTR("~k_i defaulting to "));
+    Ki = DEFAULT_Ki;
+  }
+  buf.print(Ki, 3);
+  nh.loginfo(buf.get());
+  nh.spinOnce();
+
+  buf.print_P(PSTR("~k_d"));
+  if (nh.getParam(buf.get(), &param)) {
+    buf.print_P(PSTR("~k_d = "));
+    Kd = param;
+  } else {
+    buf.print_P(PSTR("~k_d defaulting to "));
+    Kd = DEFAULT_Kd;
+  }
+  buf.print(Kd, 3);
+  nh.loginfo(buf.get());
+  nh.spinOnce();
+  
+  leftController.setConstants(Kp, Ki, Kd);
+  rightController.setConstants(Kp, Ki, Kd);
 
   lastLoopTime = micros();
   lastMotorCmdTime = lastLoopTime;
 
   taskMgr.addPeriodicTask(controlMotors, controlDelayMillis);
   taskMgr.addPeriodicTask(publishAnalogValues, 17); // 17ms ~ 60Hz
-  taskMgr.addPeriodicTask(publishSwitches, 100); // 100ms ~ 10Hz
+  taskMgr.addPeriodicTask(publishSwitches, 50); // 50ms ~ 20Hz
   taskMgr.addPeriodicTask(publishVoltage, 1000); // 1000ms ~ 1Hz
 }
 
@@ -248,19 +283,19 @@ void controlMotors() {
   long curRwheel = rwheel;
   interrupts();
 
-  float32Msg.data = (float) curLwheel / ticksPerMeter;
-  lwheelPub.publish(&float32Msg);
-  float32Msg.data = (float) curRwheel / ticksPerMeter;
-  rwheelPub.publish(&float32Msg);
+  int16Msg.data = curLwheel;
+  lwheelPub.publish(&int16Msg);
+  int16Msg.data = curRwheel;
+  rwheelPub.publish(&int16Msg);
 
   float dt = (curLoopTime - lastLoopTime) / 1E6;
 
   float lwheelRate = ((curLwheel - lastLwheel) / dt);
   float rwheelRate = ((curRwheel - lastRwheel) / dt);
 
-  float32Msg.data = lwheelRate / ticksPerMeter;
+  float32Msg.data = lwheelRate;
   lwheelVelocityPub.publish(&float32Msg);
-  float32Msg.data = rwheelRate / ticksPerMeter;
+  float32Msg.data = rwheelRate;
   rwheelVelocityPub.publish(&float32Msg);
 
   int leftControl = leftController.getControlValue(lwheelRate, dt);
@@ -298,51 +333,75 @@ void controlMotors() {
   lastRwheel = curRwheel;
 
   lastLoopTime = curLoopTime;
+
+  nh.spinOnce();
+}
+
+void publishAnalogValue(int pin, ros::Publisher *pub) {
+  int16Msg.data = analogRead(pin);
+  pub->publish(&int16Msg);
 }
 
 void publishAnalogValues() {
-  int a0 = analogRead(A0);
-  int a2 = analogRead(A2);
-  int a3 = analogRead(A3);
-  int a4 = analogRead(A4);
-  int a5 = analogRead(A5);
+  publishAnalogValue(A0, &a0Pub);
+  publishAnalogValue(A2, &a2Pub);
+  publishAnalogValue(A3, &a3Pub);
+  publishAnalogValue(A4, &a4Pub);
+  publishAnalogValue(A5, &a5Pub);
+  publishAnalogValue(A6, &a6Pub);
 
-  int32Msg.data = a0;
-  a0Pub.publish(&int32Msg);
+  nh.spinOnce();
+}
 
-  int32Msg.data = a2;
-  a2Pub.publish(&int32Msg);
-
-  int32Msg.data = a3;
-  a3Pub.publish(&int32Msg);
-
-  int32Msg.data = a4;
-  a4Pub.publish(&int32Msg);
-
-  int32Msg.data = a5;
-  a5Pub.publish(&int32Msg);
+void checkSwitch(int &state, PushbuttonBase *button, ros::Publisher *pub) {
+  if (!state && button->getSingleDebouncedPress()) {
+    int16Msg.data = 1;
+    pub->publish(&int16Msg);
+    state = 1;
+  } else if (state && button->getSingleDebouncedRelease()) {
+    int16Msg.data = 0;
+    pub->publish(&int16Msg);
+    state = 0;
+  }
 }
 
 void publishSwitches() {
-  int32Msg.data = buttonA.getSingleDebouncedPress();
-  buttonAPub.publish(&int32Msg);
+  checkSwitch(lastButtonA, &buttonA, &buttonAPub);
+  checkSwitch(lastButtonB, &buttonB, &buttonBPub);
+  checkSwitch(lastButtonC, &buttonC, &buttonCPub);
+
+  nh.spinOnce();
 }
 
 void publishVoltage() {
   float32Msg.data = readBatteryMillivoltsLV() / 1000.0;
   batteryVoltagePub.publish(&float32Msg);
+
+  nh.spinOnce();
 }
 
 void lwheelTargetCallback(const std_msgs::Float32& cmdMsg) {
   lastMotorCmdTime = millis();
-  lwheelTargetRate = cmdMsg.data * ticksPerMeter;
+  lwheelTargetRate = cmdMsg.data;
   leftController.setSetPoint(lwheelTargetRate);
 }
 
 void rwheelTargetCallback(const std_msgs::Float32& cmdMsg) {
   lastMotorCmdTime = millis();
-  rwheelTargetRate = cmdMsg.data * ticksPerMeter;
+  rwheelTargetRate = cmdMsg.data;
   rightController.setSetPoint(rwheelTargetRate);
+}
+
+void ledGreenCallback(const std_msgs::Int16& cmdMsg) {
+  ledGreen(cmdMsg.data != 0);
+}
+
+void ledRedCallback(const std_msgs::Int16& cmdMsg) {
+  ledRed(cmdMsg.data != 0);
+}
+
+void ledYellowCallback(const std_msgs::Int16& cmdMsg) {
+  ledYellow(cmdMsg.data != 0);
 }
 
 void leftAChange() {

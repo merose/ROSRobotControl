@@ -21,26 +21,36 @@ is received within a timeout threshold.
 
 === Published Topics
 
-`lwheel` (Int16):: Left wheel encoder value
-`rwheel` (Int16):: Right wheel encoder value
-`lwheel_velocity` (Float32):: Left wheel speed in meters per
-second.
-`rwheel_velocity` (Float32):: Right wheel speed in encoder ticks per
-second.
+`~l_ticks` (Int16):: Left wheel traveled distance, in encoder ticks
+`~r_ticks` (Int16):: Right wheel traveled distance, in encoder ticks
+`~l_vel` (Float32):: Left wheel speed (ticks per second)
+`~r_vel` (Float32):: Right wheel speed (ticks per second)
+`~a0` (Int16):: Analog pin A0 value
+`~a2` (Int16):: Analog pin A2 value
+`~a3` (Int16):: Analog pin A3 value
+`~a4` (Int16):: Analog pin A4 value
+`~a5` (Int16):: Analog pin A5 value
+`~a6` (Int16):: Analog pin A6 value
+`~bat_v` (Float32):: Battery voltage (Volts)
+`~btn_a` (Int16):: Switch A value (1==press, 0==release)
+`~btn_b` (Int16):: Switch B value (1==press, 0==release)
+`~btn_c` (Int16):: Switch C value (1==press, 0==release)
 
 === Subscribed Topics
 
-`lwheel_vtarget` (Float32):: Left wheel target speed in meters per second.
-`rwheel_vtarget` (Float32):: Right wheel target speed in meters per second.
+`~l_vtarg` (Float32):: Left wheel target speed (ticks per second)
+`~r_vtarg` (Float32):: Right wheel target speed (ticks per second)
+`~led_g` (Int16):: Green LED desired state (1==on, 0==off)
+`~led_r` (Int16):: Red LED desired state (1==on, 0==off)
+`~led_y` (Int16):: Yellow LED desired state (1==on, 0==off)
 
 === Parameters
 
-`ticks_meter` (Int16, default 50):: The number of encoder ticks per meter. A global parameter since it will be used by more than one node.
 `~control_rate` (Int16, default 50):: The rate at which the motors are updated, in Hz.
-`~vtarget_timeout` (Float32, default 2.0):: Maximum time, in seconds, from the
+`~vtarget_timeout` (Float32, default 0.5):: Maximum time, in seconds, from the
 last velocity target command. If no command is received within this timeout, the
 node assumes the controller node has crashed, and sets the motor speeds to
 zero.
-`Kp` (Float32, default 1.0):: Proportional control parameter.
-`Ki` (Float32, default 0.0):: Integral control parameter.
-`Kd` (Float32, default 0.0):: Derivative control parameter.
+`~k_p` (Float32, default 0.1):: Proportional control parameter.
+`~k_i` (Float32, default 0.0):: Integral control parameter.
+`~k_d` (Float32, default 0.0):: Derivative control parameter.
