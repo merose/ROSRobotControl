@@ -83,11 +83,11 @@ ros::Publisher buttonAPub("~btn_a", &int16Msg);
 ros::Publisher buttonBPub("~btn_b", &int16Msg);
 ros::Publisher buttonCPub("~btn_c", &int16Msg);
 
-void lwheelTargetCallback(const std_msgs::Float32& cmdMsg);
-ros::Subscriber<std_msgs::Float32> lwheelTargetSub("~l_vtarg", &lwheelTargetCallback);
+void lwheelTargetCallback(const std_msgs::Int16& cmdMsg);
+ros::Subscriber<std_msgs::Int16> lwheelTargetSub("~l_vtarg", &lwheelTargetCallback);
 
-void rwheelTargetCallback(const std_msgs::Float32& cmdMsg);
-ros::Subscriber<std_msgs::Float32> rwheelTargetSub("~r_vtarg", &rwheelTargetCallback);
+void rwheelTargetCallback(const std_msgs::Int16& cmdMsg);
+ros::Subscriber<std_msgs::Int16> rwheelTargetSub("~r_vtarg", &rwheelTargetCallback);
 
 void ledGreenCallback(const std_msgs::Int16& cmdMsg);
 ros::Subscriber<std_msgs::Int16> ledGreenSub("~led_g", &ledGreenCallback);
@@ -110,9 +110,9 @@ int lastButtonA = 0;
 int lastButtonB = 0;
 int lastButtonC = 0;
 
-const float DEFAULT_Kp = 0.1;
-const float DEFAULT_Kd = 0.0;
+const float DEFAULT_Kp = 0.07;
 const float DEFAULT_Ki = 0.0;
+const float DEFAULT_Kd = 0.001;
 
 float Kp = DEFAULT_Kp;
 float Ki = DEFAULT_Ki;
@@ -197,7 +197,7 @@ void setup() {
     buf.print_P(PSTR("~control_rate = "));
   } else {
     buf.print_P(PSTR("~control_rate defaulting to "));
-    controlRate = 50;
+    controlRate = 20;
   }
   buf.print(controlRate);
   buf.print_P(PSTR("Hz"));
@@ -380,13 +380,13 @@ void publishVoltage() {
   nh.spinOnce();
 }
 
-void lwheelTargetCallback(const std_msgs::Float32& cmdMsg) {
+void lwheelTargetCallback(const std_msgs::Int16& cmdMsg) {
   lastMotorCmdTime = millis();
   lwheelTargetRate = cmdMsg.data;
   leftController.setSetPoint(lwheelTargetRate);
 }
 
-void rwheelTargetCallback(const std_msgs::Float32& cmdMsg) {
+void rwheelTargetCallback(const std_msgs::Int16& cmdMsg) {
   lastMotorCmdTime = millis();
   rwheelTargetRate = cmdMsg.data;
   rightController.setSetPoint(rwheelTargetRate);
