@@ -1,5 +1,5 @@
 //
-// ROSRomeoNode - Implements a ROS node for the RomeoBLE for controlling
+// ROSRobotControl - Implements a ROS node for the Pololu A-Star for controlling
 //     a ROSRev2-class robot.
 //
 
